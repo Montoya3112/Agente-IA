@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MRCA AI Assistant</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- KaTeX Math CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="/static/styles.css">
+    
+    <!-- Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <div id="toast-container"></div>
+
+    <!-- Login View -->
+    <section id="login-view" class="view active glass-panel">
+        <div class="login-container glass-card">
+            <div class="brand">
+                <i class="fa-solid fa-brain fa-3x brand-icon"></i>
+                <h1>MRCA Solutions</h1>
+                <p>AI Assistant Access</p>
+            </div>
+            <form id="login-form">
+                <div class="input-group">
+                    <i class="fa-solid fa-envelope"></i>
+                    <input type="email" id="email" placeholder="Correo electrónico" required>
+                </div>
+                <div class="input-group">
+                    <i class="fa-solid fa-lock"></i>
+                    <input type="password" id="password" placeholder="Contraseña" required>
+                </div>
+                <button type="submit" class="btn-primary" id="btn-login">
+                    <span id="auth-btn-text">Iniciar Sesión</span>
+                    <div class="spinner hidden"></div>
+                </button>
+                <p class="auth-toggle">
+                    <span id="auth-toggle-text">¿No tienes cuenta?</span>
+                    <a href="#" id="btn-toggle-auth">Crear cuenta</a>
+                </p>
+            </form>
+        </div>
+    </section>
+
+    <!-- App Layout (Sidebar + Main) -->
+    <div id="app-layout" class="hidden">
+        <!-- Sidebar -->
+        <nav id="sidebar" class="glass-sidebar">
+            <div class="sidebar-header">
+                <i class="fa-solid fa-brain brand-icon-small"></i>
+                <span class="brand-text">MRCA AI</span>
+            </div>
+            
+            <button id="btn-new-chat" class="btn-new-chat">
+                <i class="fa-solid fa-plus"></i>
+                <span>Nuevo Chat</span>
+            </button>
+
+            <ul class="nav-links">
+                <li data-target="chat-view" class="active">
+                    <i class="fa-solid fa-message"></i>
+                    <span>Chat</span>
+                </li>
+                <li data-target="history-view">
+                    <i class="fa-solid fa-clock-rotate-left"></i>
+                    <span>Historial</span>
+                </li>
+                <li data-target="admin-view">
+                    <i class="fa-solid fa-chart-line"></i>
+                    <span>Dashboard</span>
+                </li>
+            </ul>
+            <div class="sidebar-footer">
+                <button id="btn-logout" class="btn-logout">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                    <span>Cerrar Sesión</span>
+                </button>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main id="main-content">
+            <!-- Chat View -->
+            <section id="chat-view" class="view active">
+                <div class="chat-header glass-header">
+                    <div class="header-title">
+                        <h2>Asistente Personal & Académico</h2>
+                        <span class="header-subtitle">Documentos PDF, imágenes, matemáticas LaTeX y cuestionarios</span>
+                    </div>
+                    <div class="header-right">
+                        <button id="btn-reset-chat-header" class="icon-btn-text" title="Iniciar nuevo chat">
+                            <i class="fa-solid fa-pen-to-square"></i> <span>Nuevo Chat</span>
+                        </button>
+                        <div class="status-badge online">En línea</div>
+                    </div>
+                </div>
+
+                <div id="chat-messages" class="messages-container">
+                    <!-- Beautiful Welcome Message Card -->
+                    <div id="welcome-msg-card" class="message ai-message welcome-msg">
+                        <div class="avatar"><i class="fa-solid fa-robot"></i></div>
+                        <div class="content welcome-content">
+                            <h3>👋 ¡Hola! Me alegra saludarte.</h3>
+                            <p>Soy tu asistente personal de <strong>MRCA Solutions</strong>. Estoy aquí para acompañarte y hacer tu día a día más sencillo, productivo y fluido.</p>
+
+                            <div class="welcome-features">
+                                <div class="feature-item">
+                                    <i class="fa-solid fa-file-pdf"></i>
+                                    <div>
+                                        <strong>Análisis de Documentos y PDF</strong>
+                                        <span>Sube archivos PDF o texto para resúmenes o preguntas.</span>
+                                    </div>
+                                </div>
+                                <div class="feature-item">
+                                    <i class="fa-solid fa-calendar-check"></i>
+                                    <div>
+                                        <strong>Tareas Cotidiana y Rutina</strong>
+                                        <span>Organización de horarios, redacción de correos y listas.</span>
+                                    </div>
+                                </div>
+                                <div class="feature-item">
+                                    <i class="fa-solid fa-calculator"></i>
+                                    <div>
+                                        <strong>Matemáticas e Ingeniería</strong>
+                                        <span>Desarrollos paso a paso con fórmulas LaTeX claras.</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <p class="welcome-footer-text">¿En qué te gustaría que trabajemos juntos hoy?</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Typing Indicator -->
+                <div id="typing-indicator" class="typing-indicator hidden">
+                    <div class="dot"></div>
+                    <div class="dot"></div>
+                    <div class="dot"></div>
+                </div>
+
+                <!-- Quick Action Chips -->
+                <div id="quick-chips-bar" class="quick-chips-container">
+                    <button class="chip-btn" onclick="usarPromptRapido('Ayúdame a organizar mi rutina del día de hoy. Tengo que estudiar 2 horas, hacer ejercicio, responder correos pendientes y avanzar en mi proyecto. Dame una agenda equilibrada con descansos.')">
+                        <i class="fa-solid fa-calendar-days"></i> 📅 Organizar mi Día
+                    </button>
+                    <button class="chip-btn" onclick="usarPromptRapido('Ayúdame a redactar un correo profesional y amable para solicitar un plazo de entrega extendido para un proyecto de ingeniería.')">
+                        <i class="fa-solid fa-envelope-open-text"></i> ✉️ Redactar Correo
+                    </button>
+                    <button class="chip-btn" onclick="usarPromptRapido('Genera un cuestionario interactivo de 4 preguntas de opción múltiple sobre Inteligencia Artificial con respuestas desplegables.')">
+                        <i class="fa-solid fa-list-check"></i> 📝 Crear Cuestionario
+                    </button>
+                    <button class="chip-btn" onclick="usarPromptRapido('Resuelve paso a paso la integral indefinida ∫(3x^2 + 5x - 2) dx y la ecuación cuadrática 2x^2 - 8x + 6 = 0 en formato LaTeX.')">
+                        <i class="fa-solid fa-calculator"></i> 🧮 Resolver Matemáticas
+                    </button>
+                </div>
+
+                <div class="chat-input-area glass-card">
+                    <!-- Image Preview -->
+                    <div id="image-preview-container" class="hidden">
+                        <img id="image-preview" src="" alt="Preview">
+                        <button id="btn-remove-image"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+
+                    <!-- PDF / Document Preview -->
+                    <div id="doc-preview-container" class="file-preview-badge hidden">
+                        <i class="fa-solid fa-file-pdf doc-icon"></i>
+                        <span id="doc-filename">archivo.pdf</span>
+                        <button id="btn-remove-doc" type="button"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+
+                    <form id="chat-form">
+                        <button type="button" id="btn-attach" class="icon-btn" title="Adjuntar imagen">
+                            <i class="fa-solid fa-camera"></i>
+                        </button>
+                        <input type="file" id="image-input" accept="image/*" class="hidden">
+
+                        <button type="button" id="btn-attach-doc" class="icon-btn" title="Adjuntar documento o PDF">
+                            <i class="fa-solid fa-file-pdf"></i>
+                        </button>
+                        <input type="file" id="doc-input" accept=".pdf,.txt,.csv,.json,.py,.js,.md,.doc,.docx" class="hidden">
+                        
+                        <input type="text" id="chat-input" placeholder="Escribe un mensaje, sube un PDF/imagen o haz una pregunta..." autocomplete="off">
+                        
+                        <button type="button" id="btn-voice" class="icon-btn" title="Entrada de voz">
+                            <i class="fa-solid fa-microphone"></i>
+                        </button>
+                        <button type="submit" id="btn-send" class="btn-primary icon-only" title="Enviar mensaje">
+                            <i class="fa-solid fa-paper-plane"></i>
+                        </button>
+                    </form>
+                </div>
+            </section>
+
+            <!-- History View -->
+            <section id="history-view" class="view hidden">
+                <div class="glass-header">
+                    <h2>Historial de Consultas</h2>
+                </div>
+                <div id="history-container" class="grid-container">
+                    <!-- History cards injected here -->
+                </div>
+            </section>
+
+            <!-- Admin Dashboard View -->
+            <section id="admin-view" class="view hidden">
+                <div class="glass-header">
+                    <div>
+                        <h2>Telemetría del Sistema</h2>
+                        <span class="header-subtitle">Monitoreo en tiempo real de infraestructura AI</span>
+                    </div>
+                    <button id="btn-refresh-admin" class="icon-btn" title="Actualizar datos"><i class="fa-solid fa-sync"></i></button>
+                </div>
+                
+                <div class="dashboard-grid">
+                    <div class="metric-card glass-card">
+                        <h3>Consultas Totales</h3>
+                        <div class="value" id="metric-queries">0</div>
+                    </div>
+                    <div class="metric-card glass-card">
+                        <h3>Consultas con Imagen/Doc</h3>
+                        <div class="value" id="metric-latency">0</div>
+                    </div>
+                    <div class="metric-card glass-card">
+                        <h3>Usuarios Únicos</h3>
+                        <div class="value" id="metric-users">0</div>
+                    </div>
+                    <div class="metric-card glass-card">
+                        <h3>Disponibilidad (Uptime)</h3>
+                        <div class="value" id="metric-api">99.9%</div>
+                    </div>
+                </div>
+
+                <!-- 3D Visualization Container -->
+                <div id="canvas-container" class="glass-card">
+                    <div class="viz-controls">
+                        <button class="viz-btn active" data-viz="network">Red Neuronal 3D</button>
+                        <button class="viz-btn" data-viz="sphere">Red Core 3D</button>
+                        <button class="viz-btn" data-viz="bars">Métricas 3D</button>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Scripts -->
+    <script src="/static/dashboard3d.js"></script>
+    <script src="/static/app.js"></script>
+</body>
+</html>
