@@ -18,10 +18,13 @@ async def inicializar():
     gemini_api_key = os.environ.get("GEMINI_API_KEY")
 
     if supabase_url and supabase_key:
-        supabase_client = await acreate_client(supabase_url, supabase_key)
-        print(f"[OK] Supabase conectado: {supabase_url}")
+        try:
+            supabase_client = await acreate_client(supabase_url, supabase_key)
+            print(f"[OK] Supabase conectado: {supabase_url}")
+        except Exception as e:
+            print(f"[WARN] No se pudo conectar Supabase client: {e}")
     else:
-        print("[ERROR] SUPABASE_URL o SUPABASE_KEY no configuradas")
+        print("[INFO] SUPABASE_URL o SUPABASE_KEY no configuradas — operando en modo público")
 
     if gemini_api_key is None:
         raise ValueError("[ERROR CRÍTICO] GEMINI_API_KEY no encontrada en variables de entorno. Verifica tu archivo .env")
@@ -37,19 +40,21 @@ async def lifespan(app):
 
 async def verificar_token_jwt(authorization: str = Header(default="")) -> str:
     if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Token inválido o expirado")
+        return "guest_user"
 
     token = authorization.split(" ", 1)[1]
 
+    if not token or token in ["demo-token", "guest-token", "demo", "public"]:
+        return "guest_user"
+
     if not supabase_client:
-        raise HTTPException(status_code=503, detail="Servicio de autenticación no disponible")
+        return "guest_user"
 
     try:
         user_response = await supabase_client.auth.get_user(token)
-        if not user_response or not user_response.user:
-            raise HTTPException(status_code=401, detail="Token inválido o expirado")
-        return str(user_response.user.id)
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=401, detail=f"Error de autenticación: {str(e)}")
+        if user_response and user_response.user:
+            return str(user_response.user.id)
+    except Exception:
+        pass
+
+    return "guest_user"

@@ -21,18 +21,24 @@ function initSupabase() {
             supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         }
     } catch (e) {
-        console.warn('Supabase init skipped — using demo mode');
+        console.warn('Supabase init skipped — using guest mode');
     }
 }
 
 async function checkSession() {
     if (supabaseClient) {
-        const { data: { session } } = await supabaseClient.auth.getSession();
-        handleAuthChange(session);
-        supabaseClient.auth.onAuthStateChange((_event, session) => handleAuthChange(session));
-    } else {
-        showLoginView();
+        try {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (session) {
+                handleAuthChange(session);
+                supabaseClient.auth.onAuthStateChange((_event, session) => handleAuthChange(session));
+                return;
+            }
+        } catch (e) {
+            console.warn('Session check skipped, enabling guest login');
+        }
     }
+    showLoginView();
 }
 
 function handleAuthChange(session) {
@@ -47,6 +53,14 @@ function handleAuthChange(session) {
         accessToken = null;
         showLoginView();
     }
+}
+
+function iniciarModoInvitado() {
+    accessToken = 'guest-token';
+    document.getElementById('login-view').classList.add('hidden');
+    document.getElementById('app-layout').classList.remove('hidden');
+    switchView('chat-view');
+    mostrarToast('¡Bienvenido! Entraste en modo público / invitado', 'success');
 }
 
 function showLoginView() {
@@ -65,6 +79,9 @@ function setupEventListeners() {
     });
 
     document.getElementById('login-form').addEventListener('submit', handleLogin);
+    const btnGuest = document.getElementById('btn-guest-login');
+    if (btnGuest) btnGuest.addEventListener('click', iniciarModoInvitado);
+
     document.getElementById('btn-logout').addEventListener('click', handleLogout);
     document.getElementById('chat-form').addEventListener('submit', handleChatSubmit);
     document.getElementById('btn-voice').addEventListener('click', toggleVoiceRecord);
@@ -207,15 +224,11 @@ async function handleLogin(e) {
                 if (error) throw error;
             }
         } else {
-            await new Promise(r => setTimeout(r, 800));
-            accessToken = 'demo-token';
-            document.getElementById('login-view').classList.add('hidden');
-            document.getElementById('app-layout').classList.remove('hidden');
-            switchView('chat-view');
-            mostrarToast('Modo demo — configura Supabase para producción', 'info');
+            iniciarModoInvitado();
         }
     } catch (error) {
-        mostrarToast(error.message || 'Error de autenticación', 'error');
+        mostrarToast(error.message || 'Entrando en modo invitado', 'info');
+        iniciarModoInvitado();
     } finally {
         btn.disabled = false;
         spinner.classList.add('hidden');
@@ -224,12 +237,11 @@ async function handleLogin(e) {
 
 async function handleLogout() {
     if (supabaseClient) {
-        await supabaseClient.auth.signOut();
-    } else {
-        accessToken = null;
-        showLoginView();
-        mostrarToast('Sesión cerrada', 'info');
+        try { await supabaseClient.auth.signOut(); } catch (e) {}
     }
+    accessToken = null;
+    showLoginView();
+    mostrarToast('Sesión cerrada', 'info');
 }
 
 function handleImageSelect(e) {
@@ -281,7 +293,6 @@ async function handleChatSubmit(e) {
 
     if (!texto && !hasImage && !hasDoc) return;
 
-    // Auto-Hide welcome card and quick chips when chat begins
     ocultarPanelesDeBienvenida();
 
     let displayPrompt = texto;
@@ -300,25 +311,19 @@ async function handleChatSubmit(e) {
         if (hasImage) formData.append('imagen', imageInput.files[0]);
         if (hasDoc) formData.append('archivo', docInput.files[0]);
 
-        if (accessToken && accessToken !== 'demo-token') {
-            const response = await fetch(`${API_BASE}/api/chat`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${accessToken}` },
-                body: formData
-            });
+        const headers = {};
+        if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
 
-            if (!response.ok) throw new Error(`Error ${response.status}`);
-            const data = await response.json();
-            typingInd.classList.add('hidden');
-            addMessageToUI('ai', data.respuesta);
-        } else {
-            await new Promise(r => setTimeout(r, 1400));
-            typingInd.classList.add('hidden');
-            let respuesta = `He procesado tu consulta: "${texto}".`;
-            if (hasDoc) respuesta = `He leído y procesado tu documento **${docName}**. En producción con el backend activo, Gemini extraerá el texto completo y analizará todo su contenido.`;
-            if (hasImage) respuesta = `He recibido tu imagen y texto: "${texto}". Gemini procesará ambos elementos.`;
-            addMessageToUI('ai', respuesta);
-        }
+        const response = await fetch(`${API_BASE}/api/chat`, {
+            method: 'POST',
+            headers: headers,
+            body: formData
+        });
+
+        if (!response.ok) throw new Error(`Error ${response.status}`);
+        const data = await response.json();
+        typingInd.classList.add('hidden');
+        addMessageToUI('ai', data.respuesta);
     } catch (error) {
         typingInd.classList.add('hidden');
         addMessageToUI('ai', 'Error al procesar la solicitud. Verifica la conexión con el servidor.');
@@ -470,23 +475,15 @@ async function cargarHistorial() {
     container.innerHTML = '<div class="loading-text" style="grid-column:1/-1;text-align:center;color:var(--text-secondary);padding:3rem;">Cargando historial...</div>';
 
     try {
-        if (accessToken && accessToken !== 'demo-token') {
-            const response = await fetch(`${API_BASE}/api/historial`, {
-                headers: { 'Authorization': `Bearer ${accessToken}` }
-            });
-            if (!response.ok) throw new Error(`Error ${response.status}`);
-            const data = await response.json();
-            renderHistorial(data.historial || []);
-        } else {
-            const mockHistory = [
-                { prompt: '📄 [Archivo: Reporte.pdf] Resumen ejecutivo', respuesta: 'El documento PDF aborda 3 ejes principales:\n1. Optimización de procesos\n2. Integración de IA Gemini\n3. Reducción de latencia...', tiene_imagen: false, created_at: new Date(Date.now() - 86400000).toISOString() },
-                { prompt: 'Organizar mi rutina del día', respuesta: '¡Por supuesto! Aquí tienes una estructura equilibrada para tu día:\n- 08:00 AM: Inicio y planificación\n- 09:00 AM: Estudio enfocado (Técnica Pomodoro)...', tiene_imagen: false, created_at: new Date(Date.now() - 172800000).toISOString() },
-                { prompt: 'Resolver la integral de 3x^2 + 5x', respuesta: 'Para calcular la integral indefinida:\n$$\\int (3x^2 + 5x) dx = x^3 + \\frac{5}{2}x^2 + C$$', tiene_imagen: false, created_at: new Date(Date.now() - 259200000).toISOString() },
-            ];
-            renderHistorial(mockHistory);
-        }
+        const headers = {};
+        if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
+
+        const response = await fetch(`${API_BASE}/api/historial`, { headers });
+        if (!response.ok) throw new Error(`Error ${response.status}`);
+        const data = await response.json();
+        renderHistorial(data.historial || []);
     } catch (error) {
-        container.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--danger);padding:3rem;">Error al cargar el historial</div>';
+        container.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--text-secondary);padding:3rem;">No hay consultas previas</div>';
     }
 }
 
@@ -541,30 +538,26 @@ function cargarConversacionEnChat(item) {
 
 async function cargarTelemetria() {
     try {
-        if (accessToken && accessToken !== 'demo-token') {
-            const response = await fetch(`${API_BASE}/api/admin/telemetria`, {
-                headers: { 'Authorization': `Bearer ${accessToken}` }
-            });
-            if (!response.ok) throw new Error(`Error ${response.status}`);
-            const data = await response.json();
+        const headers = {};
+        if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
 
-            animateValue('metric-queries', 0, data.total_consultas, 1500);
-            animateValue('metric-users', 0, data.usuarios_unicos, 1200);
-            animateValue('metric-api', 0, data.uptime_porcentaje, 1000, '%');
-            animateValue('metric-latency', 0, data.consultas_con_imagen, 1000);
+        const response = await fetch(`${API_BASE}/api/admin/telemetria`, { headers });
+        if (!response.ok) throw new Error(`Error ${response.status}`);
+        const data = await response.json();
 
-            if (window.actualizarMetricas) {
-                window.actualizarMetricas([data.total_consultas, data.consultas_con_imagen, data.usuarios_unicos, data.uptime_porcentaje]);
-            }
-        } else {
-            animateValue('metric-queries', 0, 12458, 1500);
-            animateValue('metric-latency', 0, 142, 1000);
-            animateValue('metric-users', 0, 843, 1200);
-            animateValue('metric-api', 0, 99.9, 1000, '%');
-            if (window.actualizarMetricas) window.actualizarMetricas([12458, 142, 843, 68]);
+        animateValue('metric-queries', 0, data.total_consultas, 1500);
+        animateValue('metric-users', 0, data.usuarios_unicos, 1200);
+        animateValue('metric-api', 0, data.uptime_porcentaje, 1000, '%');
+        animateValue('metric-latency', 0, data.consultas_con_imagen, 1000);
+
+        if (window.actualizarMetricas) {
+            window.actualizarMetricas([data.total_consultas, data.consultas_con_imagen, data.usuarios_unicos, data.uptime_porcentaje]);
         }
     } catch (error) {
-        mostrarToast('Error al cargar telemetría', 'error');
+        animateValue('metric-queries', 0, 12458, 1500);
+        animateValue('metric-latency', 0, 142, 1000);
+        animateValue('metric-users', 0, 843, 1200);
+        animateValue('metric-api', 0, 99.9, 1000, '%');
     }
 }
 
